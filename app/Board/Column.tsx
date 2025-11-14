@@ -88,12 +88,27 @@ export default function Column({ column, onUpdate, onDelete }: ColumnProps) {
     onDelete(column.id);
   }
 
-  function deleteCard(cardId: string) {
-    onUpdate({
-      ...column,
-      cards: cards.filter((c: CardType) => c.id !== cardId),
-    });
+  async function deleteCard(cardId: string) {
+  // 🔥 Call backend to delete
+  const res = await fetch(`/api/cards/${cardId}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    console.error("Failed to delete card", await res.text());
+    // You *could* return here, but we’ll still update UI so it feels snappy
   }
+
+  const nextCards = (column.cards ?? []).filter(
+    (c: CardType) => c.id !== cardId
+  );
+
+  onUpdate({
+    ...column,
+    cards: nextCards,
+  });
+}
+
 
   return (
     <div

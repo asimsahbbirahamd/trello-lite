@@ -30,27 +30,6 @@ export default function Card({ card, onDelete }: CardProps) {
     transition,
   };
 
-  async function deleteCard() {
-    try {
-      const res = await fetch(`/api/cards/${card.id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        console.error(
-          "Failed to delete card",
-          res.status,
-          await res.text()
-        );
-      }
-    } catch (err) {
-      console.error("Delete card request error:", err);
-    } finally {
-      // UI update regardless — keeps it feeling snappy
-      onDelete();
-    }
-  }
-
   async function saveTitle() {
     setIsEditing(false);
 
@@ -104,7 +83,7 @@ export default function Card({ card, onDelete }: CardProps) {
         <p
           className="text-sm text-gray-700 cursor-text"
           onClick={(e) => {
-            e.stopPropagation();
+            e.stopPropagation(); // don’t start drag when trying to edit
             setIsEditing(true);
           }}
         >
@@ -114,8 +93,8 @@ export default function Card({ card, onDelete }: CardProps) {
 
       <button
         onClick={(e) => {
-          e.stopPropagation(); // don't start drag
-          deleteCard();
+          e.stopPropagation(); // don’t start drag
+          onDelete();          // 🔥 just notify parent
         }}
         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 
                    text-gray-400 hover:text-red-600 transition"

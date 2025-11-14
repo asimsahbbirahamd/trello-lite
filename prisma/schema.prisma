@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+  // no custom output here, let Prisma use the default @prisma/client
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")  // pooled (pooler)
+  directUrl = env("DIRECT_URL")    // direct (5432)
+}
+
+    
+
+model Board {
+  id        String   @id @default(cuid())
+  title     String
+  createdAt DateTime @default(now())
+
+  columns   Column[]
+}
+
+model Column {
+  id        String   @id @default(cuid())
+  title     String
+  order     Int
+
+  boardId   String
+  board     Board    @relation(fields: [boardId], references: [id])
+
+  cards     Card[]
+}
+
+model Card {
+  id        String   @id @default(cuid())
+  title     String
+  body      String?
+  order     Int
+
+  columnId  String
+  column    Column   @relation(fields: [columnId], references: [id])
+}
+
+
+
+
+    

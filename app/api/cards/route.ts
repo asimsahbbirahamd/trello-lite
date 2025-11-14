@@ -4,7 +4,19 @@ import prisma from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
-    const { columnId, title } = await req.json();
+    const body = await req.json().catch(() => null);
+
+    if (!body) {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+
+    const { columnId, title } = body as {
+      columnId?: string;
+      title?: string;
+    };
 
     if (!columnId || !title) {
       return NextResponse.json(
@@ -13,26 +25,25 @@ export async function POST(req: Request) {
       );
     }
 
-    // Find next order in this column
-    const maxOrder = await prisma.card.findFirst({
+    // find current max order in that column
+    const maxOrder = await prisma.card.aggregate({
       where: { columnId },
-      orderBy: { order: "desc" },
-      select: { order: true },
+      _max: { order: true },
     });
+
+    const nextOrder = (maxOrder._max.order ?? -1) + 1;
 
     const card = await prisma.card.create({
       data: {
         title,
-        body: "",
-        order: (maxOrder?.order ?? 0) + 1,
         columnId,
+        order: nextOrder,
       },
     });
 
-    // ✅ Always return JSON
-    return NextResponse.json(card, { status: 201 });
+    return NextResponse.json(card);
   } catch (err) {
-    console.error("Card create error:", err);
+    console.error("Create card error:", err);
     return NextResponse.json(
       { error: "Failed to create card" },
       { status: 500 }

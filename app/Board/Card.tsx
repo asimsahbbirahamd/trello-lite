@@ -83,7 +83,7 @@ export default function Card({ card, onDelete }: CardProps) {
         <p
           className="text-sm text-gray-700 cursor-text"
           onClick={(e) => {
-            e.stopPropagation(); // don’t start drag when trying to edit
+            e.stopPropagation(); // don’t trigger drag
             setIsEditing(true);
           }}
         >
@@ -93,8 +93,8 @@ export default function Card({ card, onDelete }: CardProps) {
 
       <button
         onClick={(e) => {
-          e.stopPropagation(); // don’t start drag
-          onDelete();          // 🔥 just notify parent
+          e.stopPropagation(); // don’t trigger drag
+          onDelete(); // 🔥 Column handles the real delete
         }}
         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 
                    text-gray-400 hover:text-red-600 transition"

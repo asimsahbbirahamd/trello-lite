@@ -1,12 +1,13 @@
 // app/api/cards/[id]/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-// ✅ UPDATE CARD (title / order / columnId)
+// ✅ UPDATE CARD (for title / order / columnId)
 export async function PUT(req: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
@@ -49,13 +50,16 @@ export async function PUT(req: Request, context: RouteContext) {
   } catch (err) {
     console.error("Error updating card:", err);
     return NextResponse.json(
-      { error: "Failed to update card" },
+      {
+        error: "Failed to update card",
+        detail: (err as Error).message ?? String(err),
+      },
       { status: 500 }
     );
   }
 }
 
-// 🗑️ DELETE CARD
+// 🗑️ DELETE CARD (idempotent)
 export async function DELETE(
   _req: Request,
   context: RouteContext
@@ -70,8 +74,22 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Delete card error:", err);
+
+    const e = err as Prisma.PrismaClientKnownRequestError & {
+      code?: string;
+      message?: string;
+    };
+
+    // If card already gone, still treat as success
+    if (e.code === "P2025") {
+      return NextResponse.json({ success: true });
+    }
+
     return NextResponse.json(
-      { error: "Failed to delete card" },
+      {
+        error: "Failed to delete card",
+        detail: e.message ?? String(err),
+      },
       { status: 500 }
     );
   }

@@ -65,39 +65,50 @@ export default function Card({ card, onDelete }: CardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className="bg-white p-3 rounded-lg border border-gray-300 shadow-sm group relative cursor-grab active:cursor-grabbing"
+      className="bg-white p-3 rounded-lg border border-gray-300 shadow-sm group relative flex items-start gap-2"
     >
-      {isEditing ? (
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={saveTitle}
-          onKeyDown={handleKeyDown}
-          autoFocus
-          disabled={saving}
-          className="w-full text-sm border border-gray-300 rounded px-2 py-1 outline-none focus:ring focus:ring-gray-300"
-        />
-      ) : (
-        <p
-          className="text-sm text-gray-700 cursor-text"
-          onClick={(e) => {
-            e.stopPropagation(); // don’t trigger drag
-            setIsEditing(true);
-          }}
-        >
-          {value}
-        </p>
-      )}
+      {/* 🔥 Drag handle only here */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="w-2 h-6 mt-1 rounded-full bg-gray-300 cursor-grab active:cursor-grabbing"
+        aria-label="Drag card"
+      />
 
+      {/* Card content */}
+      <div className="flex-1">
+        {isEditing ? (
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            disabled={saving}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1 outline-none focus:ring focus:ring-gray-300"
+          />
+        ) : (
+          <p
+            className="text-sm text-gray-700 cursor-text"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsEditing(true);
+            }}
+          >
+            {value}
+          </p>
+        )}
+      </div>
+
+      {/* Delete button – no dnd listeners, click is clean */}
       <button
         onClick={(e) => {
-          e.stopPropagation(); // don’t trigger drag
-          onDelete(); // 🔥 Column handles the real delete
+          e.stopPropagation();
+          onDelete();
         }}
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 
+        className="ml-1 mt-0.5 opacity-0 group-hover:opacity-100 
                    text-gray-400 hover:text-red-600 transition"
+        aria-label="Delete card"
       >
         ✕
       </button>

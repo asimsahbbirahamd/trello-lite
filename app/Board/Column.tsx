@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import Card from "./Card";
 
 interface CardType {
@@ -88,20 +91,23 @@ export default function Column({ column, onUpdate, onDelete }: ColumnProps) {
     onDelete(column.id);
   }
 
-  // 🔥 REAL delete happens here
   async function deleteCard(cardId: string) {
-  const res = await fetch(`/api/cards/${cardId}`, {
-    method: "DELETE",
-  });
+  try {
+    const res = await fetch(`/api/cards/${cardId}`, {
+      method: "DELETE",
+    });
 
-  if (!res.ok) {
-    console.error("Failed to delete card on server", await res.text());
-    // we *still* update the UI below so it feels responsive
+    if (!res.ok) {
+      console.error("Failed to delete card on server", await res.text());
+      // we still continue with UI update so it feels responsive
+    }
+  } catch (err) {
+    console.error("Network error while deleting card", err);
+    // still continue with UI update
   }
 
-  const nextCards = (column.cards ?? []).filter(
-    (c: CardType) => c.id !== cardId
-  );
+  const cards = column.cards ?? [];
+  const nextCards = cards.filter((c) => c.id !== cardId);
 
   onUpdate({
     ...column,

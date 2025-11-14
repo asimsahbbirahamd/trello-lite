@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // find current max order in that column
+    // Find current max order in this column
     const maxOrder = await prisma.card.aggregate({
       where: { columnId },
       _max: { order: true },

@@ -1,264 +1,278 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import Column from "./Column";
-import type { Column as ColumnType } from "./types";
+import { DndContext, DragEndEvent, closestCenter } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
+
+interface CardType {
+  id: string;
+  title: string;
+  order: number;
+  columnId: string;
+  body?: string | null;
+}
+
+interface ColumnType {
+  id: string;
+  title: string;
+  order: number;
+  boardId: string;
+  cards?: CardType[];
+}
+
+interface BoardType {
+  id: string;
+  title: string;
+  columns: ColumnType[];
+}
 
 export default function Board() {
-  const [columns, setColumns] = useState<ColumnType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [board, setBoard] = useState<BoardType | null>(null);
 
-  // Initial load: localStorage first, then DB
   useEffect(() => {
-    async function init() {
-      try {
-        // 1) Try localStorage so your changes survive refresh
-        if (typeof window !== "undefined") {
-          const saved = localStorage.getItem("kanban-board");
-          if (saved) {
-            try {
-              const parsed = JSON.parse(saved) as ColumnType[];
-              setColumns(parsed);
-              setLoading(false);
-              return;
-            } catch (err) {
-              console.error("Invalid saved board data:", err);
-            }
-          }
+    fetch("/api/boards")
+      .then((res) => res.json())
+      .then((data) => {
+        const first = data?.[0] as BoardType | undefined;
+        if (first) {
+          const normalized: BoardType = {
+            ...first,
+            columns: (first.columns ?? []).map((col) => ({
+              ...col,
+              cards: (col.cards ?? []).map((card, idx) => ({
+                ...card,
+                order: card.order ?? idx,
+              })),
+            })),
+          };
+          setBoard(normalized);
         }
-
-        // 2) Load from API (Supabase via Prisma)
-        const res = await fetch("/api/boards");
-        let data = await res.json();
-        if (!Array.isArray(data)) data = [];
-
-        let board;
-
-        if (data.length === 0) {
-          // If no board, create one
-          const createRes = await fetch("/api/boards", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: "My Board" }),
-          });
-          board = await createRes.json();
-        } else {
-          board = data[0];
-        }
-
-        const mapped: ColumnType[] = (board.columns || []).map((col: any) => ({
-          id: col.id,
-          title: col.title,
-          cards: (col.cards || []).map((card: any) => ({
-            id: card.id,
-            title: card.title,
-          })),
-        }));
-
-        setColumns(mapped);
-      } catch (err) {
-        console.error("Failed to load board:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    init();
+      });
   }, []);
 
-  // Persist to localStorage whenever columns change
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("kanban-board", JSON.stringify(columns));
-  }, [columns]);
+  if (!board) {
+    return <p className="p-6 text-gray-500">Loading board…</p>;
+  }
 
-  // Column operations
-  const addColumn = () => {
-    setColumns((prev) => [
-      ...prev,
-      {
-        id: `col-${Date.now()}`,
-        title: "New Column",
-        cards: [],
-      },
-    ]);
-  };
+  async function addColumn() {
+    if (!board) return;
 
-  const deleteColumn = (id: string) =>
-    setColumns((prev) => prev.filter((col) => col.id !== id));
+    const res = await fetch("/api/columns", {
+      method: "POST",
+      body: JSON.stringify({
+        boardId: board.id,
+        title: "Untitled",
+      }),
+    });
 
-  const editColumn = (id: string) =>
-    setColumns((prev) =>
-      prev.map((col) =>
-        col.id === id ? { ...col, isEditing: true } : col
-      )
-    );
+    if (!res.ok) {
+      console.error("Failed to create column", await res.text());
+      return;
+    }
 
-  const saveColumn = (id: string, value: string) =>
-    setColumns((prev) =>
-      prev.map((col) =>
-        col.id === id
-          ? {
-              ...col,
-              title: value.trim() || col.title,
-              isEditing: false,
-            }
-          : col
-      )
-    );
+    const newColumn = (await res.json()) as {
+      id: string;
+      title: string;
+      order: number;
+      boardId: string;
+    };
 
-  const cancelColumn = (id: string) =>
-    setColumns((prev) =>
-      prev.map((col) =>
-        col.id === id ? { ...col, isEditing: false } : col
-      )
-    );
-
-  // Card operations
-  const addCard = (colId: string) =>
-    setColumns((prev) =>
-      prev.map((col) =>
-        col.id === colId
-          ? {
-              ...col,
-              cards: [
-                ...col.cards,
-                { id: `${colId}-${Date.now()}`, title: "New Task" },
-              ],
-            }
-          : col
-      )
-    );
-
-  const editCard = (cardId: string) =>
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.map((c) =>
-          c.id === cardId ? { ...c, isEditing: true } : c
-        ),
-      }))
-    );
-
-  const saveCard = (cardId: string, val: string) =>
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.map((c) =>
-          c.id === cardId
-            ? { ...c, title: val.trim() || c.title, isEditing: false }
-            : c
-        ),
-      }))
-    );
-
-  const cancelCard = (cardId: string) =>
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.map((c) =>
-          c.id === cardId ? { ...c, isEditing: false } : c
-        ),
-      }))
-    );
-
-  const deleteCard = (cardId: string) =>
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.filter((c) => c.id !== cardId),
-      }))
-    );
-
-  // Drag logic
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over) return;
-
-    setColumns((prev) => {
-      let sourceColIndex = -1;
-      let targetColIndex = -1;
-      let sourceCardIndex = -1;
-      let targetCardIndex = -1;
-
-      prev.forEach((col, colIndex) => {
-        col.cards.forEach((card, cardIndex) => {
-          if (card.id === active.id) {
-            sourceColIndex = colIndex;
-            sourceCardIndex = cardIndex;
-          }
-          if (card.id === over.id) {
-            targetColIndex = colIndex;
-            targetCardIndex = cardIndex;
-          }
-        });
-      });
-
-      if (targetColIndex === -1) {
-        const colId = String(over.id);
-        targetColIndex = prev.findIndex((col) => col.id === colId);
-        if (targetColIndex === -1) return prev;
-        targetCardIndex = prev[targetColIndex].cards.length;
-      }
-
-      if (sourceColIndex === -1 || sourceCardIndex === -1) return prev;
-
-      const newCols = prev.map((col) => ({
-        ...col,
-        cards: [...col.cards],
-      }));
-
-      const [moved] = newCols[sourceColIndex].cards.splice(
-        sourceCardIndex,
-        1
-      );
-
-      newCols[targetColIndex].cards.splice(
-        targetCardIndex ?? newCols[targetColIndex].cards.length,
-        0,
-        moved
-      );
-
-      return newCols;
+    setBoard((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        columns: [
+          ...prev.columns,
+          {
+            id: newColumn.id,
+            title: newColumn.title,
+            order: newColumn.order,
+            boardId: newColumn.boardId,
+            cards: [],
+          },
+        ],
+      };
     });
   }
 
-  if (loading) {
-    return <div className="p-6 text-white">Loading board...</div>;
+  function updateColumn(updated: ColumnType) {
+    setBoard((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        columns: prev.columns.map((col) =>
+          col.id === updated.id
+            ? {
+                ...col,
+                ...updated,
+                cards: updated.cards ?? col.cards ?? [],
+              }
+            : col
+        ),
+      };
+    });
+  }
+
+  function removeColumn(columnId: string) {
+    setBoard((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        columns: prev.columns.filter((col) => col.id !== columnId),
+      };
+    });
+  }
+
+  async function persistColumnOrder(columnId: string, cards: CardType[]) {
+    try {
+      await fetch("/api/cards/reorder", {
+        method: "POST",
+        body: JSON.stringify({
+          columnId,
+          orderedIds: cards.map((c) => c.id),
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to persist card order", err);
+    }
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || !board) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    if (activeId === overId) return;
+
+    const columns = [...board.columns];
+
+    // Find source column + card
+    const sourceColIndex = columns.findIndex((col) =>
+      (col.cards ?? []).some((c) => c.id === activeId)
+    );
+    if (sourceColIndex === -1) return;
+
+    const sourceCol = columns[sourceColIndex];
+    const sourceCards = [...(sourceCol.cards ?? [])];
+    const activeCardIndex = sourceCards.findIndex((c) => c.id === activeId);
+    if (activeCardIndex === -1) return;
+
+    const activeCard = sourceCards[activeCardIndex];
+
+    // Determine target column + index
+    let targetColIndex = columns.findIndex((col) => col.id === overId);
+    let targetCards: CardType[];
+    let targetIndex: number;
+
+    if (targetColIndex !== -1) {
+      // Dropped on column itself
+      targetCards = [...(columns[targetColIndex].cards ?? [])];
+      targetIndex = targetCards.length;
+    } else {
+      // Dropped on another card
+      targetColIndex = columns.findIndex((col) =>
+        (col.cards ?? []).some((c) => c.id === overId)
+      );
+      if (targetColIndex === -1) return;
+
+      targetCards = [...(columns[targetColIndex].cards ?? [])];
+      const overIndex = targetCards.findIndex((c) => c.id === overId);
+      if (overIndex === -1) return;
+      targetIndex = overIndex;
+    }
+
+    const sourceIsTarget = sourceColIndex === targetColIndex;
+
+    if (sourceIsTarget) {
+      // Move inside same column
+      const reordered = arrayMove(sourceCards, activeCardIndex, targetIndex).map(
+        (card, idx) => ({
+          ...card,
+          order: idx,
+        })
+      );
+
+      columns[sourceColIndex] = {
+        ...sourceCol,
+        cards: reordered,
+      };
+
+      setBoard({
+        ...board,
+        columns,
+      });
+
+      persistColumnOrder(sourceCol.id, reordered);
+    } else {
+      // Move across columns
+      // Remove from source
+      sourceCards.splice(activeCardIndex, 1);
+      const normalizedSource = sourceCards.map((card, idx) => ({
+        ...card,
+        order: idx,
+      }));
+
+      // Insert into target
+      const targetCol = columns[targetColIndex];
+      targetCards.splice(targetIndex, 0, {
+        ...activeCard,
+        columnId: targetCol.id,
+      });
+      const normalizedTarget = targetCards.map((card, idx) => ({
+        ...card,
+        order: idx,
+      }));
+
+      columns[sourceColIndex] = {
+        ...columns[sourceColIndex],
+        cards: normalizedSource,
+      };
+      columns[targetColIndex] = {
+        ...columns[targetColIndex],
+        cards: normalizedTarget,
+      };
+
+      setBoard({
+        ...board,
+        columns,
+      });
+
+      persistColumnOrder(columns[sourceColIndex].id, normalizedSource);
+      persistColumnOrder(columns[targetColIndex].id, normalizedTarget);
+    }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between px-4 pt-4">
-        <h1 className="text-2xl font-semibold text-white">Trello-Lite</h1>
+    <DndContext
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex gap-6 p-6 overflow-x-auto min-h-screen bg-gray-100">
+        {board.columns
+          .slice()
+          .sort((a: ColumnType, b: ColumnType) => a.order - b.order)
+          .map((col: ColumnType) => (
+            <Column
+              key={col.id}
+              column={col}
+              onUpdate={updateColumn}
+              onDelete={removeColumn}
+            />
+          ))}
+
+        {/* Add Column Button */}
         <button
           onClick={addColumn}
-          className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-500"
+          className="h-fit px-4 py-3 bg-white border border-gray-300 rounded-xl shadow-sm hover:bg-gray-50"
         >
           + Add Column
         </button>
       </div>
-
-      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 px-4 pb-4">
-          {columns.map((col) => (
-            <Column
-              key={col.id}
-              column={col}
-              onAddCard={() => addCard(col.id)}
-              onDeleteColumn={() => deleteColumn(col.id)}
-              onStartEditColumn={() => editColumn(col.id)}
-              onSaveColumn={(val) => saveColumn(col.id, val)}
-              onCancelColumn={() => cancelColumn(col.id)}
-              onStartEditCard={editCard}
-              onSaveCard={saveCard}
-              onCancelCard={cancelCard}
-              onDeleteCard={deleteCard}
-            />
-          ))}
-        </div>
-      </DndContext>
-    </div>
+    </DndContext>
   );
 }

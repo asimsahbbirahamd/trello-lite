@@ -1,4 +1,5 @@
 // app/Board/types.ts
+
 export type Card = {
   id: string;
   title: string;
@@ -8,6 +9,6 @@ export type Card = {
 export type Column = {
   id: string;
   title: string;
-  cards: Card[];
   isEditing?: boolean;
+  cards: Card[];
 };
